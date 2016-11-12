@@ -139,6 +139,9 @@ public class NettyRemotingServer extends NettyRemotingAbstract implements Remoti
 
 
     @Override
+    /**
+     * 启动Server
+     */
     public void start() {
         this.defaultEventExecutorGroup = new DefaultEventExecutorGroup(//
                 nettyServerConfig.getServerWorkerThreads(), //
