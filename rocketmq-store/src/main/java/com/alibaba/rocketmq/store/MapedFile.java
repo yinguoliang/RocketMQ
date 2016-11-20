@@ -192,10 +192,15 @@ public class MapedFile extends ReferenceResource {
 
         int currentPos = this.wrotePostion.get();
 
-
+        //mappedByteBuffer作为基本的存储媒介，它的属性不会变，包括mark,position,limit等
+        //如果想向mappedByteBuffer中存值，需要通过slice()函数复制一个对象
+        //然后通过复制对象来向其中存数据。
+        //因为mappedByteBuffer既要给写进程用，也要给读进程用(很多消费进程，进度可能不同)，
+        //所以其本身的属性不能变，不然无法满足这个需求
+        //当然，我们也可以重新定义或者包装ByteBuffer，就像Netty做的那样，这两种方式应该都可以
         if (currentPos < this.fileSize) {
             ByteBuffer byteBuffer = this.mappedByteBuffer.slice();
-            byteBuffer.position(currentPos);
+            byteBuffer.position(currentPos);//拷贝出来的缓存，position应该=0，这里设置最新位置
             AppendMessageResult result =
                     cb.doAppend(this.getFileFromOffset(), byteBuffer, this.fileSize - currentPos, msg);
             this.wrotePostion.addAndGet(result.getWroteBytes());

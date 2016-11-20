@@ -620,7 +620,11 @@ public class BrokerController {
             this.brokerFastFailure.start();
         }
     }
-
+    /**
+     * 将broker实例注册到nameserver上
+     * @param checkOrderConfig
+     * @param oneway
+     */
     public synchronized void registerBrokerAll(final boolean checkOrderConfig, boolean oneway) {
         TopicConfigSerializeWrapper topicConfigWrapper = this.getTopicConfigManager().buildTopicConfigSerializeWrapper();
 

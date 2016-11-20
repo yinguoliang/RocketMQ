@@ -281,20 +281,21 @@ public abstract class AbstractSendMessageProcessor implements NettyRequestProces
 
     protected SendMessageRequestHeader parseRequestHeader(RemotingCommand request)
             throws RemotingCommandException {
-
+    	//comment by yyy
+    	//处理客户自定义的请求信息，自定义信息由用户存放到request.extFields中
+    	//这里的处理思路就是构造一个SendMessageRequestHeaderV2对象，然后从extFields中拿到值并set到对象中
         SendMessageRequestHeaderV2 requestHeaderV2 = null;
         SendMessageRequestHeader requestHeader = null;
         switch (request.getCode()) {
             case RequestCode.SEND_MESSAGE_V2:
-                requestHeaderV2 =
-                        (SendMessageRequestHeaderV2) request
-                                .decodeCommandCustomHeader(SendMessageRequestHeaderV2.class);
-            case RequestCode.SEND_MESSAGE:
+                requestHeaderV2 = (SendMessageRequestHeaderV2) request.decodeCommandCustomHeader(SendMessageRequestHeaderV2.class);
+            case RequestCode.SEND_MESSAGE:///注意:java的case语句，只是一个入口，一旦进入了某个入口，后面的case就不管用了
+            								//所以，无论上面的case返回何值，这里都会执行
+            	//如果不是V2版本的消息，或者上面返回了NULL，都按照老的格式构造一个RequestHeader
                 if (null == requestHeaderV2) {
-                    requestHeader =
-                            (SendMessageRequestHeader) request
-                                    .decodeCommandCustomHeader(SendMessageRequestHeader.class);
+                    requestHeader = (SendMessageRequestHeader) request.decodeCommandCustomHeader(SendMessageRequestHeader.class);
                 } else {
+                	//根据V2格式的RequestHeader构造返回结果
                     requestHeader = SendMessageRequestHeaderV2.createSendMessageRequestHeaderV1(requestHeaderV2);
                 }
             default:

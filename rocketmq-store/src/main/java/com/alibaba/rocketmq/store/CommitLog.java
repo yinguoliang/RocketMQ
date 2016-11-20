@@ -997,7 +997,10 @@ public class CommitLog {
             return msgStoreItemMemory;
         }
 
-
+        /**
+         * append到文件里面的消息类型是一个有结构的的数据，本方法会将msg消息重新marshall成内部格式（类似java class文件的思想）
+         * 每个消息有CRC校验码，以便读进程读取消息之后可以校验消息完整性
+         */
         public AppendMessageResult doAppend(final long fileFromOffset, final ByteBuffer byteBuffer, final int maxBlank, final Object msg) {
             // STORETIMESTAMP + STOREHOSTADDRESS + OFFSET <br>
             MessageExtBrokerInner msgInner = (MessageExtBrokerInner) msg;
