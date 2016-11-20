@@ -185,12 +185,12 @@ public class DefaultMessageStore implements MessageStore {
     }
 
     /**
-
-     *
+     *启动消息存储的服务
      * @throws Exception
      */
     public void start() throws Exception {
         this.flushConsumeQueueService.start();
+        //消息的存储文件
         this.commitLog.start();
         this.storeStatsService.start();
 
@@ -204,6 +204,7 @@ public class DefaultMessageStore implements MessageStore {
         } else {
             this.reputMessageService.setReputFromOffset(this.commitLog.getMaxOffset());
         }
+        //定期（1s）从CommitLog中，将未索引的消息读出来，存储到Consume Queue中
         this.reputMessageService.start();
 
         this.haService.start();
@@ -1639,23 +1640,28 @@ public class DefaultMessageStore implements MessageStore {
                         && this.reputFromOffset >= DefaultMessageStore.this.getConfirmOffset()) {
                     break;
                 }
-
+                //将所有未处理过的消息都读出来：从reputFromOffset开始，到commitLog的最大位置wrotePostion
+                //注意，读出来的是ByteBuffer，里面存储了从上次到当前时间为止接受的到所有消息
                 SelectMapedBufferResult result = DefaultMessageStore.this.commitLog.getData(reputFromOffset);
                 if (result != null) {
                     try {
                         this.reputFromOffset = result.getStartOffset();
 
                         for (int readSize = 0; readSize < result.getSize() && doNext; ) {
+                        	//获得的ByteBuffer是byte数组，并没有具体的结构，这里调用checkMessageAndReturnSize尝试读取一条消息
+                        	//（因为消息在commitLog中是由结构的）
                             DispatchRequest dispatchRequest =
                                     DefaultMessageStore.this.commitLog.checkMessageAndReturnSize(result.getByteBuffer(), false, false);
                             int size = dispatchRequest.getMsgSize();
 
                             if (dispatchRequest.isSuccess()) {
                                 if (size > 0) {
+                                	//索引消息
                                     DefaultMessageStore.this.doDispatch(dispatchRequest);
 
                                     if (BrokerRole.SLAVE != DefaultMessageStore.this.getMessageStoreConfig().getBrokerRole()
                                             && DefaultMessageStore.this.brokerConfig.isLongPollingEnable()) {
+                                    	//可以消费消息了
                                         DefaultMessageStore.this.messageArrivingListener.arriving(dispatchRequest.getTopic(),
                                                 dispatchRequest.getQueueId(), dispatchRequest.getConsumeQueueOffset() + 1,
                                                 dispatchRequest.getTagsCode());
