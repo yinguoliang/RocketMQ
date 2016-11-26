@@ -1650,6 +1650,7 @@ public class DefaultMessageStore implements MessageStore {
                         for (int readSize = 0; readSize < result.getSize() && doNext; ) {
                         	//获得的ByteBuffer是byte数组，并没有具体的结构，这里调用checkMessageAndReturnSize尝试读取一条消息
                         	//（因为消息在commitLog中是由结构的）
+                        	//这里只读取一条消息(每次for循环处理一个消息，知道处理了所有的消息为止）
                             DispatchRequest dispatchRequest =
                                     DefaultMessageStore.this.commitLog.checkMessageAndReturnSize(result.getByteBuffer(), false, false);
                             int size = dispatchRequest.getMsgSize();

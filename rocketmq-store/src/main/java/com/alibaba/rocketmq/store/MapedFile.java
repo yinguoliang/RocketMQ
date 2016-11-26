@@ -321,13 +321,14 @@ public class MapedFile extends ReferenceResource {
     }
 
     /**
-
+	 * 读取从pos偏移开始，到wrotePosition位置的所有消息
      */
     public SelectMapedBufferResult selectMapedBuffer(int pos) {
         if (pos < this.wrotePostion.get() && pos >= 0) {
             if (this.hold()) {
                 ByteBuffer byteBuffer = this.mappedByteBuffer.slice();
                 byteBuffer.position(pos);
+                //注意wrotePosition只代表本mapFile写到的地方，如果mapFile切换了，wrotePosition就是本mapFile最大的位置所在
                 int size = this.wrotePostion.get() - pos;
                 ByteBuffer byteBufferNew = byteBuffer.slice();
                 byteBufferNew.limit(size);

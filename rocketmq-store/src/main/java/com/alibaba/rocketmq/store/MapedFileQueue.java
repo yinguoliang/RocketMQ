@@ -468,8 +468,15 @@ public class MapedFileQueue {
         try {
             this.readWriteLock.readLock().lock();
             MapedFile mapedFile = this.getFirstMapedFile();
-
+            // 如果第一个文件为空，则表示暂时没有消息存储进来，后面不用做什么事情了
+            //不为空的话，需要根据期望的偏移值定位到具体的消息文件里面（消息是存储到rolling file中的）
             if (mapedFile != null) {
+            	/*
+            	 * 计算偏移量对应的文件index
+            	 * 加入文件大小是10，那么offset=35的时候，index应该是3（从0开始计算）
+            	 * 但是，如果第一个文件的是从10开始的，那么index应该修正为2
+            	 * 所以这里有了个减法的计算逻辑
+            	 */
                 int index =
                         (int) ((offset / this.mapedFileSize) - (mapedFile.getFileFromOffset() / this.mapedFileSize));
                 if (index < 0 || index >= this.mapedFiles.size()) {

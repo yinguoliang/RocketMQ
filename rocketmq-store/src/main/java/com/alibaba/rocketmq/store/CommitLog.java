@@ -121,7 +121,11 @@ public class CommitLog {
         int mapedFileSize = this.defaultMessageStore.getMessageStoreConfig().getMapedFileSizeCommitLog();
         MapedFile mapedFile = this.mapedFileQueue.findMapedFileByOffset(offset, returnFirstOnNotFound);
         if (mapedFile != null) {
+        	//offset / mapFileSize 可以计算出文件的index（参考mapedFileQueue.findMapedFileByOffset方法）
+        	//offset % mapFileSize 可以计算出消息在文件中开始位置
             int pos = (int) (offset % mapedFileSize);
+            //从文件的offset出，读取到wrotePosition位置的所有的消息（注意wrotePosition只代表本mapFile的写位置
+            //有可能当前文件并不是最新的文件
             SelectMapedBufferResult result = mapedFile.selectMapedBuffer(pos);
             return result;
         }
