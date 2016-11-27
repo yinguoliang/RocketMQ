@@ -190,7 +190,7 @@ public class DefaultMessageStore implements MessageStore {
      */
     public void start() throws Exception {
         this.flushConsumeQueueService.start();
-        //消息的存储文件
+        //定期刷消息到存储文件
         this.commitLog.start();
         this.storeStatsService.start();
 
