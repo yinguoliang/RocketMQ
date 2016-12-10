@@ -88,7 +88,9 @@ public class PullMessageProcessor implements NettyRequestProcessor {
         final PullMessageRequestHeader requestHeader =
                 (PullMessageRequestHeader) request.decodeCommandCustomHeader(PullMessageRequestHeader.class);
 
-
+        //opaque是发送端自动生成的一个数字（一个不断自增的数字），用于标识请求
+        //这里将opaque原样传回给客户端，帮助客户端识别请求
+        //opaque是一个int类型，自增最大值的时候，会从最小负值开始循环
         response.setOpaque(request.getOpaque());
 
         if (log.isDebugEnabled()) {
