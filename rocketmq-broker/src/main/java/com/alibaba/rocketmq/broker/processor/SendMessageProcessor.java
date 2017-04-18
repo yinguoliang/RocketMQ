@@ -62,6 +62,9 @@ public class SendMessageProcessor extends AbstractSendMessageProcessor implement
 
     @Override
     public RemotingCommand processRequest(ChannelHandlerContext ctx, RemotingCommand request) throws RemotingCommandException {
+        /*
+         * 接收producer发来的消息
+         */
         SendMessageContext mqtraceContext = null;
         switch (request.getCode()) {
             case RequestCode.CONSUMER_SEND_MSG_BACK:
@@ -114,7 +117,9 @@ public class SendMessageProcessor extends AbstractSendMessageProcessor implement
             return response;
         }
 
-
+        /*
+         * 判断当前的broker是否可以接收写入消息。通常master是有读、写权限的，slave只有读权限
+         */
         if (!PermName.isWriteable(this.brokerController.getBrokerConfig().getBrokerPermission())) {
             response.setCode(ResponseCode.NO_PERMISSION);
             response.setRemark("the broker[" + this.brokerController.getBrokerConfig().getBrokerIP1() + "] sending message is forbidden");

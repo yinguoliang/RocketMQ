@@ -101,7 +101,9 @@ public class BrokerOuterAPI {
             this.remotingClient.updateNameServerAddressList(lst);
         }
     }
-
+    /**
+     * 向所有的NameServer注册自己
+     */
     public RegisterBrokerResult registerBrokerAll(//
                                                   final String clusterName, // 1
                                                   final String brokerAddr, // 2
@@ -114,11 +116,16 @@ public class BrokerOuterAPI {
                                                   final int timeoutMills// 9
     ) {
         RegisterBrokerResult registerBrokerResult = null;
-
+        /*
+         * 获取name server地址列表
+         */
         List<String> nameServerAddressList = this.remotingClient.getNameServerAddressList();
         if (nameServerAddressList != null) {
             for (String namesrvAddr : nameServerAddressList) {
                 try {
+                    /*
+                     * 循环注册
+                     */
                     RegisterBrokerResult result = this.registerBroker(namesrvAddr, clusterName, brokerAddr, brokerName, brokerId,
                             haServerAddr, topicConfigWrapper, filterServerList, oneway, timeoutMills);
                     if (result != null) {

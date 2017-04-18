@@ -235,6 +235,13 @@ public class TopicConfigManager extends ConfigManager {
                                                           final int clientDefaultTopicQueueNums,//
                                                           final int perm,//
                                                           final int topicSysFlag) {
+        /*
+         * 获取topic的配置信息
+         * 注意：这里是broker，现在接到了producer发过来的消息
+         * 如果已经有了topic的配置，则直接返回
+         * 否则，new一个topic配置，并向name server注册（所有的name server）
+         * 
+         */
         TopicConfig topicConfig = this.topicConfigTable.get(topic);
         if (topicConfig != null)
             return topicConfig;
@@ -268,6 +275,11 @@ public class TopicConfigManager extends ConfigManager {
         }
 
         if (createNew) {
+            /*
+             * 注册topic配置
+             * 注意：虽然这个方法的入参并没有体现broker的topic信息，
+             * 但是实际上方法里面会拿到诸如topicConfigTable、dataVersion等信息，并注册到name server上
+             */
             this.brokerController.registerBrokerAll(false, true);
         }
 

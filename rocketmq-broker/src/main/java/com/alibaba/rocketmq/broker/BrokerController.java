@@ -186,6 +186,10 @@ public class BrokerController {
 
         if (result) {
             this.remotingServer = new NettyRemotingServer(this.nettyServerConfig, this.clientHousekeepingService);
+            /*
+             * fastRemotingServer拷贝remotingServer的配置，监听端口号-2
+             * (why need another server???)
+             */
             NettyServerConfig fastConfig = (NettyServerConfig) this.nettyServerConfig.clone();
             fastConfig.setListenPort(nettyServerConfig.getListenPort() - 2);
             this.fastRemotingServer = new NettyRemotingServer(fastConfig, this.clientHousekeepingService);
@@ -626,6 +630,9 @@ public class BrokerController {
      * @param oneway
      */
     public synchronized void registerBrokerAll(final boolean checkOrderConfig, boolean oneway) {
+        /*
+         * topic配置信息，会封装topicConfigTable和dataVersion信息
+         */
         TopicConfigSerializeWrapper topicConfigWrapper = this.getTopicConfigManager().buildTopicConfigSerializeWrapper();
 
         if (!PermName.isWriteable(this.getBrokerConfig().getBrokerPermission())
@@ -639,16 +646,22 @@ public class BrokerController {
             }
             topicConfigWrapper.setTopicConfigTable(topicConfigTable);
         }
-
+        /*
+         * 将当前的broker信息注册到name server上，无论是master还是slave都一样
+         */
         RegisterBrokerResult registerBrokerResult = this.brokerOuterAPI.registerBrokerAll(//
                 this.brokerConfig.getBrokerClusterName(), //
                 this.getBrokerAddr(), //
                 this.brokerConfig.getBrokerName(), //
+                //BrokerId，必须是大等于0的整数，0表示Master，>0表示Slave，
+                //一个Master可以挂多个Slave，Master与Slave通过BrokerName来配对，默认【0】
                 this.brokerConfig.getBrokerId(), //
                 this.getHAServerAddr(), //
                 topicConfigWrapper,//
                 this.filterServerManager.buildNewFilterServerList(),//
-                oneway,//
+                //是否单向请求,如果是true,表示调用者不接收响应,否则调用方会收到响应结果
+                oneway,
+                //
                 this.brokerConfig.getRegisterBrokerTimeoutMills());
 
         if (registerBrokerResult != null) {
