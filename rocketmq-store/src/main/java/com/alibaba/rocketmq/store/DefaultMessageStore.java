@@ -190,7 +190,10 @@ public class DefaultMessageStore implements MessageStore {
      */
     public void start() throws Exception {
         this.flushConsumeQueueService.start();
-        //定期刷消息到存储文件
+        /*
+         * 定期刷消息到存储文件
+         * 消息可能会根据配置，不是实时刷到磁盘的
+         */
         this.commitLog.start();
         this.storeStatsService.start();
 
@@ -274,7 +277,9 @@ public class DefaultMessageStore implements MessageStore {
             log.warn("message store has shutdown, so putMessage is forbidden");
             return new PutMessageResult(PutMessageStatus.SERVICE_NOT_AVAILABLE, null);
         }
-
+        /*
+         * slave是不能写入消息的
+         */
         if (BrokerRole.SLAVE == this.messageStoreConfig.getBrokerRole()) {
             long value = this.printTimes.getAndIncrement();
             if ((value % 50000) == 0) {
@@ -313,6 +318,9 @@ public class DefaultMessageStore implements MessageStore {
         }
 
         long beginTime = this.getSystemClock().now();
+        /*
+         * 写入commit log
+         */
         PutMessageResult result = this.commitLog.putMessage(msg);
 
         long eclipseTime = this.getSystemClock().now() - beginTime;
@@ -1594,6 +1602,10 @@ public class DefaultMessageStore implements MessageStore {
             return 1000 * 60;
         }
     }
+    /**
+     * 索引消息
+     * @author yinguoliang 2017年4月19日 下午4:33:35
+     */
     class ReputMessageService extends ServiceThread {
 
         private volatile long reputFromOffset = 0;

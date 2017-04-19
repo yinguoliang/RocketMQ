@@ -100,6 +100,11 @@ public class IndexFile {
     }
 
     public boolean putKey(final String key, final long phyOffset, final long storeTimestamp) {
+        /*
+         * 判断当前的index file是否已经达到上限了
+         * indexNum是文件能存的最大的数量
+         * 如果已经满了，则返回false,上层代码会循环处理
+         */
         if (this.indexHeader.getIndexCount() < this.indexNum) {
             int keyHash = indexKeyHashMethod(key);
             int slotPos = keyHash % this.hashSlotNum;
@@ -129,12 +134,17 @@ public class IndexFile {
                 } else if (timeDiff < 0) {
                     timeDiff = 0;
                 }
-
+                /*
+                 * 计算追加的位置
+                 * 因为索引消息的大小都是一样的(20B)，所以这里就根据已索引的消息量*索引大小 来获取索引追加位置
+                 */
                 int absIndexPos =
                         IndexHeader.INDEX_HEADER_SIZE + this.hashSlotNum * HASH_SLOT_SIZE
                                 + this.indexHeader.getIndexCount() * INDEX_SIZE;
 
-
+                /*
+                 * 索引消息
+                 */
                 this.mappedByteBuffer.putInt(absIndexPos, keyHash);
                 this.mappedByteBuffer.putLong(absIndexPos + 4, phyOffset);
                 this.mappedByteBuffer.putInt(absIndexPos + 4 + 8, (int) timeDiff);
@@ -148,7 +158,9 @@ public class IndexFile {
                     this.indexHeader.setBeginPhyOffset(phyOffset);
                     this.indexHeader.setBeginTimestamp(storeTimestamp);
                 }
-
+                /*
+                 * indexHeader也是固定大小的，用来记录索引文件的统计信息，如消息总数、物理偏移地址、索引时间等
+                 */
                 this.indexHeader.incHashSlotCount();
                 this.indexHeader.incIndexCount();
                 this.indexHeader.setEndPhyOffset(phyOffset);

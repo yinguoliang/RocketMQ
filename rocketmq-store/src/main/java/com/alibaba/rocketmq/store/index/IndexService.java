@@ -207,7 +207,13 @@ public class IndexService {
         return topic + "#" + key;
     }
 
-
+    /**
+     * <font color=red><strong>
+     * 索引消息<br>
+     * 入参是一个消息的内容，本方法将该消息索引到对应的consume queue文件中
+     * </font></strong>
+     * @param req
+     */
     public void buildIndex(DispatchRequest req) {
         IndexFile indexFile = retryGetAndCreateIndexFile();
         if (indexFile != null) {
@@ -230,6 +236,9 @@ public class IndexService {
             }
 
             if (req.getUniqKey() != null) {
+                /*
+                 * 将消息索引到文件中
+                 */
                 indexFile = putKey(indexFile, msg, buildKey(topic, req.getUniqKey()));
                 if (indexFile == null) {
                     log.error("putKey error commitlog {} uniqkey {}", req.getCommitLogOffset(), req.getUniqKey());
@@ -259,18 +268,21 @@ public class IndexService {
 
 
     private IndexFile putKey(IndexFile indexFile, DispatchRequest msg, String idxKey) {
-        for (boolean ok =
-                indexFile.putKey(idxKey, msg.getCommitLogOffset(),
-                    msg.getStoreTimestamp()); !ok;) {
+        
+        for (
+                //先尝试索引消息
+                boolean ok = indexFile.putKey(idxKey, msg.getCommitLogOffset(), msg.getStoreTimestamp()); 
+                //如果处理不成功，进入循环体
+                !ok;
+                ) {
             log.warn("index file full, so create another one, " + indexFile.getFileName());
+            //获取索引文件
             indexFile = retryGetAndCreateIndexFile();
             if (null == indexFile) {
                 return null;
             }
-
-            ok =
-                    indexFile.putKey(idxKey, msg.getCommitLogOffset(),
-                        msg.getStoreTimestamp());
+            //再次尝试索引消息
+            ok = indexFile.putKey(idxKey, msg.getCommitLogOffset(), msg.getStoreTimestamp());
         }
         return indexFile;
     }
@@ -302,7 +314,10 @@ public class IndexService {
         return indexFile;
     }
 
-
+    /**
+     * 获取(创建)索引文件
+     * @return
+     */
     public IndexFile getAndCreateLastIndexFile() {
         IndexFile indexFile = null;
         IndexFile prevIndexFile = null;
@@ -312,10 +327,15 @@ public class IndexService {
         {
             this.readWriteLock.readLock().lock();
             if (!this.indexFileList.isEmpty()) {
+                /*
+                 * 索引文件会维护多个，这里找到最近的那个文件
+                 */
                 IndexFile tmp = this.indexFileList.get(this.indexFileList.size() - 1);
+                //如果文件还没有写满，则使用
                 if (!tmp.isWriteFull()) {
                     indexFile = tmp;
                 } else {
+                    //如果文件已经写满，记录下来
                     lastUpdateEndPhyOffset = tmp.getEndPhyOffset();
                     lastUpdateIndexTimestamp = tmp.getEndTimestamp();
                     prevIndexFile = tmp;
@@ -328,6 +348,9 @@ public class IndexService {
 
         if (indexFile == null) {
             try {
+                /*
+                 * 创建新索引文件
+                 */
                 String fileName =
                         this.storePath + File.separator
                                 + UtilAll.timeMillisToHumanString(System.currentTimeMillis());
@@ -342,7 +365,9 @@ public class IndexService {
                 this.readWriteLock.writeLock().unlock();
             }
 
-
+            /*
+             * 索引文件创建成功,为了保证前一个索引文件刷盘，这里强制刷一次
+             */
             if (indexFile != null) {
                 final IndexFile flushThisFile = prevIndexFile;
                 Thread flushThread = new Thread(new Runnable() {

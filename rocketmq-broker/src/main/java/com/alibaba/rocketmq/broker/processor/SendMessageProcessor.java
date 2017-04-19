@@ -290,7 +290,9 @@ public class SendMessageProcessor extends AbstractSendMessageProcessor implement
 
         int queueIdInt = requestHeader.getQueueId();
         TopicConfig topicConfig = this.brokerController.getTopicConfigManager().selectTopicConfig(requestHeader.getTopic());
-
+        /*
+         * 随机分配一个queue
+         */
         if (queueIdInt < 0) {
             queueIdInt = Math.abs(this.random.nextInt() % 99999999) % topicConfig.getWriteQueueNums();
         }
@@ -335,6 +337,9 @@ public class SendMessageProcessor extends AbstractSendMessageProcessor implement
                 }
             }
         }
+        /*
+         * 构建存储消息，存储到commit log中
+         */
         MessageExtBrokerInner msgInner = new MessageExtBrokerInner();
         msgInner.setTopic(newTopic);
         msgInner.setBody(body);
@@ -359,7 +364,9 @@ public class SendMessageProcessor extends AbstractSendMessageProcessor implement
                 return response;
             }
         }
-
+        /*
+         * 存储消息到commit log中
+         */
         PutMessageResult putMessageResult = this.brokerController.getMessageStore().putMessage(msgInner);
         if (putMessageResult != null) {
             boolean sendOK = false;

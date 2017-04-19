@@ -201,13 +201,17 @@ public class CommitLog {
 
     /**
      * check the message and returns the message size
-     *
+     * <font color=red><strong>
+     *  <br>--------------------------------------------------<br>
+     *  从byteBuffer中读取一个消息
+     *  <br>--------------------------------------------------<br>
+     *  </strong></font>
      * @return 0 Come the end of the file // >0 Normal messages // -1 Message
      * checksum failure
      */
     public DispatchRequest checkMessageAndReturnSize(java.nio.ByteBuffer byteBuffer, final boolean checkCRC, final boolean readBody) {
         try {
-            // 1 TOTAL SIZE
+            // 1 TOTAL SIZE::本条消息的总大小
             int totalSize = byteBuffer.getInt();
             byte[] bytesContent = new byte[totalSize];
 
