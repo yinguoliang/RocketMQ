@@ -116,6 +116,9 @@ public abstract class NettyRemotingAbstract {
 
                         if (!cmd.isOnewayRPC()) {
                             if (response != null) {
+                                /*
+                                 * response不为null，将response写入channel，响应客户端
+                                 */
                                 response.setOpaque(opaque);
                                 response.markResponseType();
                                 try {
@@ -126,7 +129,10 @@ public abstract class NettyRemotingAbstract {
                                     plog.error(response.toString());
                                 }
                             } else {
-
+                                /*
+                                 * response==null，可能在方法里面已经通过其他方式响应客户端
+                                 * 也可能确实没有需要响应客户端的信息
+                                 */
                             }
                         }
                     } catch (Throwable e) {
@@ -145,7 +151,9 @@ public abstract class NettyRemotingAbstract {
                     }
                 }
             };
-
+            /*
+             * 尝试拒绝请请求，不同实现和业务不一样
+             */
             if (pair.getObject1().rejectRequest()) {
                 final RemotingCommand response = RemotingCommand.createResponseCommand(RemotingSysResponseCode.SYSTEM_BUSY,
                         "[REJECTREQUEST]system busy, start flow control for a while");
@@ -155,6 +163,9 @@ public abstract class NettyRemotingAbstract {
             }
 
             try {
+                /*
+                 * 没有拒绝任务，那么就异步执行任务
+                 */
                 final RequestTask requestTask = new RequestTask(run, ctx.channel(), cmd);
                 pair.getObject2().submit(requestTask);
             } catch (RejectedExecutionException e) {

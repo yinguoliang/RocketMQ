@@ -362,7 +362,9 @@ public class PullMessageProcessor implements NettyRequestProcessor {
 
             switch (response.getCode()) {
                 case ResponseCode.SUCCESS:
-
+                    /*
+                     * 先更新下状态监控信息
+                     */
                     this.brokerController.getBrokerStatsManager().incGroupGetNums(requestHeader.getConsumerGroup(), requestHeader.getTopic(),
                             getMessageResult.getMessageCount());
 
@@ -373,13 +375,22 @@ public class PullMessageProcessor implements NettyRequestProcessor {
 
                     if (this.brokerController.getBrokerConfig().isTransferMsgByHeap()) {
                         final long beginTimeMills = this.brokerController.getMessageStore().now();
+                        /*
+                         * 将数据从磁盘读到内存中
+                         */
                         final byte[] r = this.readGetMessageResult(getMessageResult, requestHeader.getConsumerGroup(), requestHeader.getTopic(), requestHeader.getQueueId());
                         this.brokerController.getBrokerStatsManager().incGroupGetLatency(requestHeader.getConsumerGroup(), //
                                 requestHeader.getTopic(), requestHeader.getQueueId(),//
                                 (int) (this.brokerController.getMessageStore().now() - beginTimeMills));
+                        /*
+                         * 设置到response中
+                         */
                         response.setBody(r);
                     } else {
                         try {
+                            /*
+                             * 利用netty的零拷贝技术，将几个ByteBuffer直接写到channel，返回给客户端
+                             */
                             FileRegion fileRegion =
                                     new ManyMessageTransfer(response.encodeHeader(getMessageResult.getBufferTotalSize()), getMessageResult);
                             channel.writeAndFlush(fileRegion).addListener(new ChannelFutureListener() {
@@ -462,7 +473,7 @@ public class PullMessageProcessor implements NettyRequestProcessor {
                 && this.brokerController.getMessageStoreConfig().getBrokerRole() != BrokerRole.SLAVE;
         if (storeOffsetEnable) {
             /*
-             * 消费进度保存
+             * 消费进度保存：消费端会主动提交需要commit的进度信息
              */
             this.brokerController.getConsumerOffsetManager().commitOffset(RemotingHelper.parseChannelRemoteAddr(channel),
                     requestHeader.getConsumerGroup(), requestHeader.getTopic(), requestHeader.getQueueId(), requestHeader.getCommitOffset());
