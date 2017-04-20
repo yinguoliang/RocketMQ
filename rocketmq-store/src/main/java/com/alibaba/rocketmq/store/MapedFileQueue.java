@@ -524,7 +524,14 @@ public class MapedFileQueue {
         return this.mapedFiles.get(this.mapedFiles.size() - 1);
     }
 
-
+    /**
+     * offset是全局的,而存储文件实际上会根据不同的设置有一定的大小限制
+     * 所以，这里采用了一个技巧，将多个物理文件包装在一起，形成一个逻辑文件
+     * 而offset则是一个逻辑的偏移地址，但是我们根据逻辑的offset，
+     * 可以计算得到offset应该归属于哪个物理文件
+     * @param offset
+     * @return
+     */
     public MapedFile findMapedFileByOffset(final long offset) {
         return findMapedFileByOffset(offset, false);
     }

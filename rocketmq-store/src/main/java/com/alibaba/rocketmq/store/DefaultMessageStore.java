@@ -386,18 +386,28 @@ public class DefaultMessageStore implements MessageStore {
 
         GetMessageResult getResult = new GetMessageResult();
 
-
+        /*
+         * 当前commit log最大的偏移位置
+         * 也即写到commit log的最新的消息的偏移位置，再往后就没有啦
+         * 拿到这个数据，就可以限定查找范围，防止找过头了。
+         */
         final long maxOffsetPy = this.commitLog.getMaxOffset();
 
         ConsumeQueue consumeQueue = findConsumeQueue(topic, queueId);
         if (consumeQueue != null) {
+            /*
+             * ConsumeQueue保持的消息个数偏移范围
+             */
             minOffset = consumeQueue.getMinOffsetInQuque();
             maxOffset = consumeQueue.getMaxOffsetInQuque();
-
-            if (maxOffset == 0) {
+            
+            /*
+             * 请求的offset不正常时，调整下一次的nextBeginOffset，返回给客户端
+             */
+            if (maxOffset == 0) {//等于0，表示没有Queue中么有消息
                 status = GetMessageStatus.NO_MESSAGE_IN_QUEUE;
-                nextBeginOffset = nextOffsetCorrection(offset, 0);
-            } else if (offset < minOffset) {
+                nextBeginOffset = nextOffsetCorrection(offset, 0);//修正offset
+            } else if (offset < minOffset) {//请求的消息位置比queue小，将偏移移到queue的最小位置
                 status = GetMessageStatus.OFFSET_TOO_SMALL;
                 nextBeginOffset = nextOffsetCorrection(offset, minOffset);
             } else if (offset == maxOffset) {
@@ -411,6 +421,10 @@ public class DefaultMessageStore implements MessageStore {
                     nextBeginOffset = nextOffsetCorrection(offset, maxOffset);
                 }
             } else {
+                /*
+                 * 通过offset，拿到一个consume queue的MappedFile的数据段封装
+                 * 这个是一个逻辑上的封装（结果不包括数据，只包括起始指针等信息）
+                 */
                 SelectMapedBufferResult bufferConsumeQueue = consumeQueue.getIndexBuffer(offset);
                 if (bufferConsumeQueue != null) {
                     try {
@@ -422,6 +436,13 @@ public class DefaultMessageStore implements MessageStore {
                         int i = 0;
                         final int MaxFilterMessageCount = 16000;
                         final boolean diskFallRecorded = this.messageStoreConfig.isDiskFallRecorded();
+                        /*
+                         * 读取consume queue记录
+                         * i从0开始，因为bufferConsumeQueue对consume queue文件进行了封装，封装了我们可以用的数据段
+                         * 所以从0开始没有问题
+                         * 又因为consume queue存储单元大小固定，所以每个循环可以加上固定的值
+                         * （当然为了防止读取数据过多，还有一个上限MaxFilterMessageCount的限制）
+                         */
                         for (; i < bufferConsumeQueue.getSize() && i < MaxFilterMessageCount; i += ConsumeQueue.CQStoreUnitSize) {
                             long offsetPy = bufferConsumeQueue.getByteBuffer().getLong();
                             int sizePy = bufferConsumeQueue.getByteBuffer().getInt();
@@ -435,9 +456,14 @@ public class DefaultMessageStore implements MessageStore {
                                     continue;
                             }
 
-
+                            /*
+                             * 判断一下consume queue中存的偏移量是否超过了commit log的最大偏移量
+                             * （不知道什么时候会出现这种情况）
+                             */
                             boolean isInDisk = checkInDiskByCommitOffset(offsetPy, maxOffsetPy);
-
+                            /*
+                             * 本批次是否已经取到足够的消息了（消费端可能会一次性拿多个消息）
+                             */
                             if (this.isTheBatchFull(sizePy, maxMsgNums, getResult.getBufferTotalSize(), getResult.getMessageCount(),
                                     isInDisk)) {
                                 break;
@@ -445,10 +471,14 @@ public class DefaultMessageStore implements MessageStore {
 
 
                             if (this.messageFilter.isMessageMatched(subscriptionData, tagsCode)) {
+                                /*
+                                 * 从commit log中读取消息，这里也是一样的，返回的是我们需要的数据段的封装
+                                 * 这里的数据段就是一个消息的内容（是一段逻辑封装，对象是很小的）
+                                 */
                                 SelectMapedBufferResult selectResult = this.commitLog.getMessage(offsetPy, sizePy);
                                 if (selectResult != null) {
                                     this.storeStatsService.getGetMessageTransferedMsgCount().incrementAndGet();
-                                    getResult.addMessage(selectResult);
+                                    getResult.addMessage(selectResult);//注意：这里并没有反序列化消息，而是将一段磁盘空间的封装给返回了。
                                     status = GetMessageStatus.FOUND;
                                     nextPhyFileStartOffset = Long.MIN_VALUE;
                                 } else {
@@ -478,7 +508,9 @@ public class DefaultMessageStore implements MessageStore {
 
                         nextBeginOffset = offset + (i / ConsumeQueue.CQStoreUnitSize);
 
-
+                        /*
+                         * 建议从slave读取消息？？？？？
+                         */
                         long diff = maxOffsetPy - maxPhyOffsetPulling;
                         long memory = (long) (StoreUtil.TotalPhysicalMemorySize
                                 * (this.messageStoreConfig.getAccessMessageInMemoryMaxRatio() / 100.0));
@@ -500,7 +532,9 @@ public class DefaultMessageStore implements MessageStore {
             status = GetMessageStatus.NO_MATCHED_LOGIC_QUEUE;
             nextBeginOffset = nextOffsetCorrection(offset, 0);
         }
-
+        /*
+         * 统计信息
+         */
         if (GetMessageStatus.FOUND == status) {
             this.storeStatsService.getGetMessageTimesTotalFound().incrementAndGet();
         } else {
@@ -508,7 +542,9 @@ public class DefaultMessageStore implements MessageStore {
         }
         long eclipseTime = this.getSystemClock().now() - beginTime;
         this.storeStatsService.setGetMessageEntireTimeMax(eclipseTime);
-
+        /*
+         * 响应结果
+         */
         getResult.setStatus(status);
         getResult.setNextBeginOffset(nextBeginOffset);
         getResult.setMaxOffset(maxOffset);

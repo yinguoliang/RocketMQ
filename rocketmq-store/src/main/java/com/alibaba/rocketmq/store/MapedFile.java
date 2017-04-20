@@ -322,6 +322,7 @@ public class MapedFile extends ReferenceResource {
 
     /**
 	 * 读取从pos偏移开始，到wrotePosition位置的所有消息
+	 * 返回的是一个包装类，所以无论文件多大都可以
      */
     public SelectMapedBufferResult selectMapedBuffer(int pos) {
         if (pos < this.wrotePostion.get() && pos >= 0) {

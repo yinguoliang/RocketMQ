@@ -80,7 +80,14 @@ public class PullMessageProcessor implements NettyRequestProcessor {
     public boolean rejectRequest() {
         return false;
     }
-
+    /**
+     * 消费者消费消息请求
+     * @param channel
+     * @param request
+     * @param brokerAllowSuspend
+     * @return
+     * @throws RemotingCommandException
+     */
     private RemotingCommand processRequest(final Channel channel, RemotingCommand request, boolean brokerAllowSuspend)
             throws RemotingCommandException {
         RemotingCommand response = RemotingCommand.createResponseCommand(PullMessageResponseHeader.class);
@@ -201,17 +208,33 @@ public class PullMessageProcessor implements NettyRequestProcessor {
                 return response;
             }
         }
-
-        final GetMessageResult getMessageResult =
-                this.brokerController.getMessageStore().getMessage(requestHeader.getConsumerGroup(), requestHeader.getTopic(),
-                        requestHeader.getQueueId(), requestHeader.getQueueOffset(), requestHeader.getMaxMsgNums(), subscriptionData);
+        /*
+         * 消费者在客户端已经分好了各自的消费目标，包括消费哪个broker的哪个queue
+         * 所以服务端收到消费请求时，目标已经是明确的了
+         */
+        /*
+         * 根据请求参数拿消息
+         * 根据存储结构，可以猜测到，这个方法应该先找到ConsumeQueue,
+         * 从ConsumeQueue中拿到需要消费的消息的offset，
+         * 然后再到commit log中读取消息内容
+         */
+        final GetMessageResult getMessageResult = this.brokerController.getMessageStore().getMessage(//
+                requestHeader.getConsumerGroup(),//消费组,消费组作为一个整体来消费消息,每个消费组只能消费一次消息
+                requestHeader.getTopic(),//
+                requestHeader.getQueueId(),//
+                requestHeader.getQueueOffset(),//从哪个消息开始（因为consume queue存储单元大小是固定的，所以通过消息个数偏移，就能获取到下一个消息的位置）
+                requestHeader.getMaxMsgNums(), //可以一次性拿多条消息
+                subscriptionData//
+                );
         if (getMessageResult != null) {
             response.setRemark(getMessageResult.getStatus().name());
             responseHeader.setNextBeginOffset(getMessageResult.getNextBeginOffset());
             responseHeader.setMinOffset(getMessageResult.getMinOffset());
             responseHeader.setMaxOffset(getMessageResult.getMaxOffset());
 
-
+            /*
+             * 建议客户端从哪里取消息
+             */
             if (getMessageResult.isSuggestPullingFromSlave()) {
                 responseHeader.setSuggestWhichBrokerId(subscriptionGroupConfig.getWhichBrokerWhenConsumeSlowly());
             } else {
@@ -223,6 +246,9 @@ public class PullMessageProcessor implements NettyRequestProcessor {
                 case SYNC_MASTER:
                     break;
                 case SLAVE:
+                    /*
+                     * 如果当前broker是slave，且不可读，则告知消费端从master重新拉取消息
+                     */
                     if (!this.brokerController.getBrokerConfig().isSlaveReadEnable()) {
                         response.setCode(ResponseCode.PULL_RETRY_IMMEDIATELY);
                         responseHeader.setSuggestWhichBrokerId(MixAll.MASTER_ID);
@@ -435,6 +461,9 @@ public class PullMessageProcessor implements NettyRequestProcessor {
         storeOffsetEnable = storeOffsetEnable
                 && this.brokerController.getMessageStoreConfig().getBrokerRole() != BrokerRole.SLAVE;
         if (storeOffsetEnable) {
+            /*
+             * 消费进度保存
+             */
             this.brokerController.getConsumerOffsetManager().commitOffset(RemotingHelper.parseChannelRemoteAddr(channel),
                     requestHeader.getConsumerGroup(), requestHeader.getTopic(), requestHeader.getQueueId(), requestHeader.getCommitOffset());
         }

@@ -437,8 +437,17 @@ public class ConsumeQueue {
         int mapedFileSize = this.mapedFileSize;
         long offset = startIndex * CQStoreUnitSize;
         if (offset >= this.getMinLogicOffset()) {
+            /*
+             * offset是全局的,而存储文件实际上会根据不同的设置有一定的大小限制
+             * 所以，这里采用了一个技巧，将多个物理文件包装在一起，形成一个逻辑文件
+             * 而offset则是一个逻辑的偏移地址，但是我们根据逻辑的offset，可以计算得到offset应该归属于哪个物理文件
+             */
             MapedFile mapedFile = this.mapedFileQueue.findMapedFileByOffset(offset);
             if (mapedFile != null) {
+                /*
+                 * offset是逻辑偏移，这里需要与文件大小取模,得到对当前文件的偏移
+                 * 返回的是一个包装类，包装了我们需要的内容的文件范围
+                 */
                 SelectMapedBufferResult result = mapedFile.selectMapedBuffer((int) (offset % mapedFileSize));
                 return result;
             }
