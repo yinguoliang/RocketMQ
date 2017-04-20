@@ -271,7 +271,9 @@ public class DefaultMessageStore implements MessageStore {
             }
         }
     }
-
+    /**
+     * producer发送过来的消息，存储到commit log中
+     */
     public PutMessageResult putMessage(MessageExtBrokerInner msg) {
         if (this.shutdown) {
             log.warn("message store has shutdown, so putMessage is forbidden");
@@ -1002,10 +1004,27 @@ public class DefaultMessageStore implements MessageStore {
 
         return null;
     }
-
+    /**
+     * 获取ConsumeQueue(更多细节见代码注释)
+     * @param topic
+     * @param queueId
+     * @return
+     */
     public ConsumeQueue findConsumeQueue(String topic, int queueId) {
+        /*
+         * topic有多个queue，且分布在不同的broker上，topic+queueId唯一
+         * 这里只是获取本机的queue
+         * 
+         * 每台机器上会有多个topic，每个topic有多个queue，
+         * 因此这里使用了一个二级map来存储topic-queue对应的ConsumeQueue实例
+         * 
+         * 如果ConsumeQueue不存在，则创建一个
+         */
         ConcurrentHashMap<Integer, ConsumeQueue> map = consumeQueueTable.get(topic);
         if (null == map) {
+            /*
+             * 如果topic没有创建对应的queueMap，创建一个
+             */
             ConcurrentHashMap<Integer, ConsumeQueue> newMap = new ConcurrentHashMap<Integer, ConsumeQueue>(128);
             ConcurrentHashMap<Integer, ConsumeQueue> oldMap = consumeQueueTable.putIfAbsent(topic, newMap);
             if (oldMap != null) {
@@ -1017,6 +1036,9 @@ public class DefaultMessageStore implements MessageStore {
 
         ConsumeQueue logic = map.get(queueId);
         if (null == logic) {
+            /*
+             * 如果ConsumeQueue不存在，则创建一个
+             */
             ConsumeQueue newLogic = new ConsumeQueue(//
                     topic, //
                     queueId, //
@@ -1298,6 +1320,9 @@ public class DefaultMessageStore implements MessageStore {
         switch (tranType) {
             case MessageSysFlag.TransactionNotType:
             case MessageSysFlag.TransactionCommitType:
+                /*
+                 * consume queue处理
+                 */
                 DefaultMessageStore.this.putMessagePostionInfo(req.getTopic(), req.getQueueId(), req.getCommitLogOffset(), req.getMsgSize(),
                         req.getTagsCode(), req.getStoreTimestamp(), req.getConsumeQueueOffset());
                 break;
@@ -1307,13 +1332,37 @@ public class DefaultMessageStore implements MessageStore {
         }
 
         if (DefaultMessageStore.this.getMessageStoreConfig().isMessageIndexEnable()) {
+            /*
+             * 为消息建立索引信息，方便快速找到消息
+             * 索引采用hash引擎存储，索引的关键码是uniKey或keys
+             * 但是不是所有的消息都有uniKey或keys的，uniKey和keys是消息的扩展信息
+             * 如果没有uniKey和keys，则不会为消息建立索引
+             * RocketMQ支持很丰富的操作（虽然不常用），里面就包括通过key或uniKey快速查找消息
+             * 
+             * 关于hash存储引擎，有很多的文章介绍，主要作用就是可以根据key快速的定位消息存储位置
+             */
             DefaultMessageStore.this.indexService.buildIndex(req);
         }
     }
-
+    /**
+     * 处理consume queue
+     * @param topic
+     * @param queueId
+     * @param offset
+     * @param size
+     * @param tagsCode
+     * @param storeTimestamp
+     * @param logicOffset
+     */
     public void putMessagePostionInfo(String topic, int queueId, long offset, int size, long tagsCode, long storeTimestamp,
                                       long logicOffset) {
+        /*
+         * 找到对应queue实例
+         */
         ConsumeQueue cq = this.findConsumeQueue(topic, queueId);
+        /*
+         * 存储queue消息
+         */
         cq.putMessagePostionInfoWrapper(offset, size, tagsCode, storeTimestamp, logicOffset);
     }
 

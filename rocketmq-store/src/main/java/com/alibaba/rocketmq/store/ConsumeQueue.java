@@ -344,7 +344,12 @@ public class ConsumeQueue {
                                              long logicOffset) {
         final int MaxRetries = 30;
         boolean canWrite = this.defaultMessageStore.getRunningFlags().isWriteable();
+        //尝试多次，直到处理成功
         for (int i = 0; i < MaxRetries && canWrite; i++) {
+            /*
+             * 写入consume queue
+             * 每个消息的大小都是一样的（20B）
+             */
             boolean result = this.putMessagePostionInfo(offset, size, tagsCode, logicOffset);
             if (result) {
                 this.defaultMessageStore.getStoreCheckpoint().setLogicsMsgTimestamp(storeTimestamp);

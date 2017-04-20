@@ -210,7 +210,7 @@ public class IndexService {
     /**
      * <font color=red><strong>
      * 索引消息<br>
-     * 入参是一个消息的内容，本方法将该消息索引到对应的consume queue文件中
+     * 入参是一个消息的内容
      * </font></strong>
      * @param req
      */

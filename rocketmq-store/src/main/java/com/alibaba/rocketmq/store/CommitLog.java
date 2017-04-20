@@ -236,10 +236,12 @@ public class CommitLog {
             // 5 FLAG
             int flag = byteBuffer.getInt();
 
-            // 6 QUEUEOFFSET
+            // 6 QUEUEOFFSET：消息个数偏移量
             long queueOffset = byteBuffer.getLong();
 
-            // 7 PHYSICALOFFSET
+            // 7 PHYSICALOFFSET：消息在文件中的偏移地址（物理地址）
+            //   RocketMQ的commit log文件会有多个，多个文件被串联在一起，每个文件都有相对的起止偏移地址
+            //   这里的物理偏移地址就是相对于起始文件的偏移地址（也可以从当前文件的偏移地址+在当前文件的偏移量)
             long physicOffset = byteBuffer.getLong();
 
             // 8 SYSFLAG
