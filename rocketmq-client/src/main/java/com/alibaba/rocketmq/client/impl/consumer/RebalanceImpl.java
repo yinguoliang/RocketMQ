@@ -237,6 +237,13 @@ public abstract class RebalanceImpl {
     private void rebalanceByTopic(final String topic, final boolean isOrder) {
         switch (messageModel) {
             case BROADCASTING: {
+                /*
+                 * 广播模式：消费组里面的每个实例都会收到topic所有的queue的消息
+                 */
+                
+                /*
+                 * 先拿到topic下所有的queue
+                 */
                 Set<MessageQueue> mqSet = this.topicSubscribeInfoTable.get(topic);
                 if (mqSet != null) {
                     boolean changed = this.updateProcessQueueTableInRebalance(topic, mqSet, isOrder);
@@ -254,7 +261,14 @@ public abstract class RebalanceImpl {
                 break;
             }
             case CLUSTERING: {
+                /*
+                 * 集群模式：每个queue只能分配一个消费组的实例
+                 */
                 Set<MessageQueue> mqSet = this.topicSubscribeInfoTable.get(topic);
+                /*
+                 * 查询消费组里面所有的消费实例
+                 * (消费者在启动的时候会向nameserver注册)
+                 */
                 List<String> cidAll = this.mQClientFactory.findConsumerIdList(topic, consumerGroup);
                 if (null == mqSet) {
                     if (!topic.startsWith(MixAll.RETRY_GROUP_TOPIC_PREFIX)) {
@@ -277,6 +291,13 @@ public abstract class RebalanceImpl {
 
                     List<MessageQueue> allocateResult = null;
                     try {
+                        /*
+                         * 根据策略，给当前的消费者分配queue
+                         * 这里有个假设：消费者执行的都是同样的策略，这些策略可以保证分配满足要求
+                         *    但是如果假设不成立，结果可能就会出问题。不过大部分时候这个不是问题。
+                         *    （某些时候，如果解决方案比较麻烦，可以通过精心构建一种场景来实现需求，
+                         *      使用的时候，只要满足场景条件即可；其他场景可以要求使用者避免）
+                         */
                         allocateResult = strategy.allocate(//
                                 this.consumerGroup, //
                                 this.mQClientFactory.getClientId(), //
@@ -323,7 +344,13 @@ public abstract class RebalanceImpl {
             }
         }
     }
-
+    /**
+     * 拉取消息
+     * @param topic
+     * @param mqSet
+     * @param isOrder
+     * @return
+     */
     private boolean updateProcessQueueTableInRebalance(final String topic, final Set<MessageQueue> mqSet, final boolean isOrder) {
         boolean changed = false;
 
@@ -362,6 +389,13 @@ public abstract class RebalanceImpl {
         }
 
         List<PullRequest> pullRequestList = new ArrayList<PullRequest>();
+        /*
+         * 每个queue都构建一个请求消息
+         * 注意：
+         *   MessageQueue这个对象包含了broker_name,queueId等信息
+         *   broker name每组机器都是不一样，消费端会维护一个broker_name和服务地址的对应关系的
+         *   发送消息的时候，会需要这些信息
+         */
         for (MessageQueue mq : mqSet) {
             if (!this.processQueueTable.containsKey(mq)) {
                 if (isOrder && !this.lock(mq)) {
