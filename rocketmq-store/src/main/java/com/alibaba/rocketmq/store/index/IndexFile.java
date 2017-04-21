@@ -101,6 +101,22 @@ public class IndexFile {
 
     public boolean putKey(final String key, final long phyOffset, final long storeTimestamp) {
         /*
+         * 索引文件的格式:
+         * header(40)
+         * hashslot(N)
+         * index(N*20)
+         * 
+         * 首先通过key进行hash，获得hashslot位置，这位置存储了value在index部分的偏移量
+         * （index里面的单元大小是固定的，所以只要知道下标偏移就能定位到）
+         * 
+         * 通过hashslot的位置存储的偏移量，我们就能定位到index信息，然后根据index就能找到commit log中的消息
+         * 
+         * 冲突解决方案：
+         *   类似HashSet的链表，index中存储单元会存储其下一个单元的位置
+         *   这样就能将多个具有相同hash位置的元素串起来
+         */
+        
+        /*
          * 判断当前的index file是否已经达到上限了
          * indexNum是文件能存的最大的数量
          * 如果已经满了，则返回false,上层代码会循环处理
@@ -116,6 +132,10 @@ public class IndexFile {
 
                 // fileLock = this.fileChannel.lock(absSlotPos, HASH_SLOT_SIZE,
                 // false);
+                /*
+                 * 先读取slot位置已有的值，这个值会存储到index单元中
+                 * 然后这个位置就被新元素的hash给占了（类似HashMap的处理思路：新元素总是在链头）
+                 */
                 int slotValue = this.mappedByteBuffer.getInt(absSlotPos);
                 if (slotValue <= INVALID_INDEX || slotValue > this.indexHeader.getIndexCount()) {
                     slotValue = INVALID_INDEX;
@@ -135,11 +155,16 @@ public class IndexFile {
                     timeDiff = 0;
                 }
                 /*
-                 * 计算追加的位置
-                 * 因为索引消息的大小都是一样的(20B)，所以这里就根据已索引的消息量*索引大小 来获取索引追加位置
+                 * 计算index单元存储位置
+                 * 注意到index文件的三部分:
+                 *      header部分是固定大小的：40B
+                 *      hashslot的个数是固定的，每个slot的大小也是固定的
+                 *      index单元大小是固定的，数量是不断增加的，并且新来的index单元永远放在最后
+                 *  所以，这里要计算的就是新单元在index中的存储位置，这个计算规则非常简单
                  */
                 int absIndexPos =
-                        IndexHeader.INDEX_HEADER_SIZE + this.hashSlotNum * HASH_SLOT_SIZE
+                        IndexHeader.INDEX_HEADER_SIZE 
+                                + this.hashSlotNum * HASH_SLOT_SIZE
                                 + this.indexHeader.getIndexCount() * INDEX_SIZE;
 
                 /*
@@ -150,10 +175,14 @@ public class IndexFile {
                 this.mappedByteBuffer.putInt(absIndexPos + 4 + 8, (int) timeDiff);
                 this.mappedByteBuffer.putInt(absIndexPos + 4 + 8 + 4, slotValue);
 
-
+                /*
+                 * hashslot位置存储就是index单元在index中偏移量，由于index单元大小固定，存储个数下标就行了
+                 */
                 this.mappedByteBuffer.putInt(absSlotPos, this.indexHeader.getIndexCount());
 
-
+                /*
+                 * 更新indexHeader信息
+                 */
                 if (this.indexHeader.getIndexCount() <= 1) {
                     this.indexHeader.setBeginPhyOffset(phyOffset);
                     this.indexHeader.setBeginTimestamp(storeTimestamp);
@@ -221,7 +250,15 @@ public class IndexFile {
                         .getEndTimestamp());
         return result;
     }
-
+    /**
+     * 根据key从索引中拿消息的偏移量
+     * @param phyOffsets
+     * @param key
+     * @param maxNum
+     * @param begin
+     * @param end
+     * @param lock
+     */
     public void selectPhyOffset(final List<Long> phyOffsets, final String key, final int maxNum,
                                 final long begin, final long end, boolean lock) {
         if (this.mapedFile.hold()) {

@@ -209,7 +209,7 @@ public class IndexService {
 
     /**
      * <font color=red><strong>
-     * 索引消息<br>
+     * 为消息建立索引（如果消息捎带了uniKey或keys的话）<br>
      * 入参是一个消息的内容
      * </font></strong>
      * @param req
@@ -234,7 +234,7 @@ public class IndexService {
             case MessageSysFlag.TransactionRollbackType:
                 return;
             }
-
+            //如果存在unikey
             if (req.getUniqKey() != null) {
                 /*
                  * 将消息索引到文件中
@@ -245,7 +245,7 @@ public class IndexService {
                     return;
                 }
             }
-
+            //如果存在keys
             if ((keys != null && keys.length() > 0)) {
                 String[] keyset = keys.split(MessageConst.KEY_SEPARATOR);
                 for (int i = 0; i <  keyset.length; i++) {
