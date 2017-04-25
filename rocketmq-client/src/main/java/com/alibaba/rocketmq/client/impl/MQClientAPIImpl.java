@@ -145,6 +145,10 @@ public class MQClientAPIImpl {
     }
 
     public void start() {
+        /*
+         * netty客户端服务，客户端(consumer和producer)和服务端(broker,nameserver)的
+         * 通信都是由remotingClient完成的
+         */
         this.remotingClient.start();
     }
 

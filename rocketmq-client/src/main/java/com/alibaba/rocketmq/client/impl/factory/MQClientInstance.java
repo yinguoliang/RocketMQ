@@ -143,13 +143,25 @@ public class MQClientInstance {
                     if (null == this.clientConfig.getNamesrvAddr()) {
                         this.clientConfig.setNamesrvAddr(this.mQClientAPIImpl.fetchNameServerAddr());
                     }
-                    // Start request-response channel
+                    /*
+                     * 启动客户端通信服务
+                     * (netty 客户端)
+                     * 因为RocketMQ使用的是netty，客户端也要启动一个服务
+                     * 后面各种和broker、name server通信得消息，都要通过这里启动的服务来完成
+                     */
                     this.mQClientAPIImpl.start();
-                    // Start various schedule tasks
+                    /*
+                     * 启动一些定时任务
+                     */
                     this.startScheduledTask();
-                    // Start pull service
+                    /*
+                     * 负责从broker拉取消息：客户端需要拉取消息时并不会直接和broker通信
+                     * 而是通过请求消息，委托pullMessageService来完成
+                     */
                     this.pullMessageService.start();
-                    // Start rebalance service
+                    /*
+                     * 路由服务：定期到name server上拿路由信息，并更新本地
+                     */
                     this.rebalanceService.start();
                     // Start push service
                     this.defaultMQProducer.getDefaultMQProducerImpl().start(false);
@@ -171,6 +183,10 @@ public class MQClientInstance {
 
     private void startScheduledTask() {
         if (null == this.clientConfig.getNamesrvAddr()) {
+            /*
+             * 定期获取name server地址
+             * （客户端会提供一个统一的固定的URL地址，这个地址会返回name server集群地址）
+             */
             this.scheduledExecutorService.scheduleAtFixedRate(new Runnable() {
 
                 @Override
@@ -183,7 +199,9 @@ public class MQClientInstance {
                 }
             }, 1000 * 10, 1000 * 60 * 2, TimeUnit.MILLISECONDS);
         }
-
+        /*
+         * 定期从name server获取topic路由信息
+         */
         this.scheduledExecutorService.scheduleAtFixedRate(new Runnable() {
 
             @Override
@@ -195,7 +213,9 @@ public class MQClientInstance {
                 }
             }
         }, 10, this.clientConfig.getPollNameServerInteval(), TimeUnit.MILLISECONDS);
-
+        /*
+         * 客户端和broker保持心跳
+         */
         this.scheduledExecutorService.scheduleAtFixedRate(new Runnable() {
 
             @Override
@@ -208,7 +228,9 @@ public class MQClientInstance {
                 }
             }
         }, 1000, this.clientConfig.getHeartbeatBrokerInterval(), TimeUnit.MILLISECONDS);
-
+        /*
+         * 定期持久化消费进度
+         */
         this.scheduledExecutorService.scheduleAtFixedRate(new Runnable() {
 
             @Override
@@ -220,7 +242,9 @@ public class MQClientInstance {
                 }
             }
         }, 1000 * 10, this.clientConfig.getPersistConsumerOffsetInterval(), TimeUnit.MILLISECONDS);
-
+        /*
+         * 调整线程池
+         */
         this.scheduledExecutorService.scheduleAtFixedRate(new Runnable() {
 
             @Override

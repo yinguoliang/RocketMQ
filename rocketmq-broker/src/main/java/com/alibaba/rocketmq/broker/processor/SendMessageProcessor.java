@@ -68,6 +68,10 @@ public class SendMessageProcessor extends AbstractSendMessageProcessor implement
         SendMessageContext mqtraceContext = null;
         switch (request.getCode()) {
             case RequestCode.CONSUMER_SEND_MSG_BACK:
+                /*
+                 * 消费端如果消费失败，会将消息返回给broker
+                 * 这里就是接收消费失败的消息处理方法
+                 */
                 return this.consumerSendMsgBack(ctx, request);
             default:
                 SendMessageRequestHeader requestHeader = parseRequestHeader(request);

@@ -161,6 +161,9 @@ public class ConsumeMessageConcurrentlyService implements ConsumeMessageService 
         log.info("consumeMessageDirectly receive new messge: {}", msg);
 
         try {
+            /*
+             * 消费消息：消费的逻辑由客户端设置的监听器实现
+             */
             ConsumeConcurrentlyStatus status = this.messageListener.consumeMessage(msgs, context);
             if (status != null) {
                 switch (status) {
@@ -201,14 +204,22 @@ public class ConsumeMessageConcurrentlyService implements ConsumeMessageService 
                                      final MessageQueue messageQueue, //
                                      final boolean dispatchToConsume) {
         final int consumeBatchSize = this.defaultMQPushConsumer.getConsumeMessageBatchMaxSize();
+        /*
+         * 阈值以内，一次性执行完
+         */
         if (msgs.size() <= consumeBatchSize) {
+            //ConsumeRequest本身是一个Runnable实现，里面包括了消息的处理逻辑
             ConsumeRequest consumeRequest = new ConsumeRequest(msgs, processQueue, messageQueue);
             try {
                 this.consumeExecutor.submit(consumeRequest);
             } catch (RejectedExecutionException e) {
                 this.submitConsumeRequestLater(consumeRequest);
             }
-        } else {
+        } 
+        /*
+         * 超过阈值，分批进行
+         */
+        else {
             for (int total = 0; total < msgs.size(); ) {
                 List<MessageExt> msgThis = new ArrayList<MessageExt>(consumeBatchSize);
                 for (int i = 0; i < consumeBatchSize; i++, total++) {
@@ -262,7 +273,9 @@ public class ConsumeMessageConcurrentlyService implements ConsumeMessageService 
 
         if (consumeRequest.getMsgs().isEmpty())
             return;
-
+        /*
+         * 消费成功和失败分别处理
+         */
         switch (status) {
             case CONSUME_SUCCESS:
                 if (ackIndex >= consumeRequest.getMsgs().size()) {
@@ -281,15 +294,22 @@ public class ConsumeMessageConcurrentlyService implements ConsumeMessageService 
             default:
                 break;
         }
-
+        /*
+         * 处理消费失败的消息
+         * ackIndex是消费成功和失败的界限，ackIndex之后的消息都是消费失败了的，之前的都是消费成功的
+         * （ackIndex在消费成功时会向前推进）
+         */
         switch (this.defaultMQPushConsumer.getMessageModel()) {
             case BROADCASTING:
+                // 如果是广播模式，直接丢弃失败消息，需要在文档中告知用户
+                // 这样做的原因：广播模式对于失败重试代价过高，对整个集群性能会有较大影响，失败重试功能交由应用处理
                 for (int i = ackIndex + 1; i < consumeRequest.getMsgs().size(); i++) {
                     MessageExt msg = consumeRequest.getMsgs().get(i);
                     log.warn("BROADCASTING, the message consume failed, drop it, {}", msg.toString());
                 }
                 break;
             case CLUSTERING:
+                // 处理消费失败的消息，直接发回到Broker
                 List<MessageExt> msgBackFailed = new ArrayList<MessageExt>(consumeRequest.getMsgs().size());
                 for (int i = ackIndex + 1; i < consumeRequest.getMsgs().size(); i++) {
                     MessageExt msg = consumeRequest.getMsgs().get(i);
@@ -302,7 +322,7 @@ public class ConsumeMessageConcurrentlyService implements ConsumeMessageService 
 
                 if (!msgBackFailed.isEmpty()) {
                     consumeRequest.getMsgs().removeAll(msgBackFailed);
-
+                    // 此过程处理失败的消息，需要在Client中做定时消费，直到成功
                     this.submitConsumeRequestLater(msgBackFailed, consumeRequest.getProcessQueue(), consumeRequest.getMessageQueue());
                 }
                 break;
@@ -332,7 +352,12 @@ public class ConsumeMessageConcurrentlyService implements ConsumeMessageService 
 
         return false;
     }
-
+    /**
+     * 在Consumer本地定时线程中定时重试
+     * @param msgs
+     * @param processQueue
+     * @param messageQueue
+     */
     private void submitConsumeRequestLater(//
                                            final List<MessageExt> msgs, //
                                            final ProcessQueue processQueue, //
@@ -386,7 +411,7 @@ public class ConsumeMessageConcurrentlyService implements ConsumeMessageService 
                 log.info("the message queue not be able to consume, because it's dropped {}", this.messageQueue);
                 return;
             }
-
+            //消息监听：由消费者代码设置
             MessageListenerConcurrently listener = ConsumeMessageConcurrentlyService.this.messageListener;
             ConsumeConcurrentlyContext context = new ConsumeConcurrentlyContext(messageQueue);
             ConsumeConcurrentlyStatus status = null;
@@ -410,6 +435,7 @@ public class ConsumeMessageConcurrentlyService implements ConsumeMessageService 
                         MessageAccessor.setConsumeStartTimeStamp(msg, String.valueOf(System.currentTimeMillis()));
                     }
                 }
+                //调用消息监听器来处理消息
                 status = listener.consumeMessage(Collections.unmodifiableList(msgs), context);
             } catch (Throwable e) {
                 log.warn("consumeMessage exception: {} Group: {} Msgs: {} MQ: {}", //
@@ -420,7 +446,9 @@ public class ConsumeMessageConcurrentlyService implements ConsumeMessageService 
             }
 
             long consumeRT = System.currentTimeMillis() - beginTimestamp;
-
+            /*
+             * 监听器应该明确的返回消费成功，否则都默认为消费失败
+             */
             if (null == status) {
                 log.warn("consumeMessage return null, Group: {} Msgs: {} MQ: {}", //
                         ConsumeMessageConcurrentlyService.this.consumerGroup, //
@@ -439,6 +467,9 @@ public class ConsumeMessageConcurrentlyService implements ConsumeMessageService 
                     .incConsumeRT(ConsumeMessageConcurrentlyService.this.consumerGroup, messageQueue.getTopic(), consumeRT);
 
             if (!processQueue.isDropped()) {
+                /*
+                 * 消费结果处理
+                 */
                 ConsumeMessageConcurrentlyService.this.processConsumeResult(status, context, this);
             } else {
                 log.warn("processQueue is dropped without process consume result. messageQueue={}, msgs={}", messageQueue, msgs);
