@@ -313,7 +313,9 @@ public abstract class RebalanceImpl {
                     if (allocateResult != null) {
                         allocateResultSet.addAll(allocateResult);
                     }
-
+                    /*
+                     * 构建pullRequest对象，并发送到pullMessageService的请求队列里
+                     */
                     boolean changed = this.updateProcessQueueTableInRebalance(topic, allocateResultSet, isOrder);
                     if (changed) {
                         log.info(
@@ -412,6 +414,10 @@ public abstract class RebalanceImpl {
                         log.info("doRebalance, {}, mq already exists, {}", consumerGroup, mq);
                     } else {
                         log.info("doRebalance, {}, add a new mq, {}", consumerGroup, mq);
+                        /*
+                         * PullRequest自己维护了MessageQueue,ProcessQueue等信息
+                         * 是一个比较独立的功能控件
+                         */
                         PullRequest pullRequest = new PullRequest();
                         pullRequest.setConsumerGroup(consumerGroup);
                         pullRequest.setNextOffset(nextOffset);
@@ -425,7 +431,9 @@ public abstract class RebalanceImpl {
                 }
             }
         }
-
+        /*
+         * 发送请求
+         */
         this.dispatchPullRequest(pullRequestList);
 
         return changed;

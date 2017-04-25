@@ -191,6 +191,9 @@ public class DefaultMQPushConsumerImpl implements MQConsumerInner {
 
     public void pullMessage(final PullRequest pullRequest) {
         final ProcessQueue processQueue = pullRequest.getProcessQueue();
+        /*
+         * 如果消息队列重构了，会将dropped置为true
+         */
         if (processQueue.isDropped()) {
             log.info("the pull request[{}] is droped.", pullRequest.toString());
             return;

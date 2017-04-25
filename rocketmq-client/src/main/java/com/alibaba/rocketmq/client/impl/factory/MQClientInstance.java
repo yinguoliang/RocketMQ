@@ -155,7 +155,8 @@ public class MQClientInstance {
                      */
                     this.startScheduledTask();
                     /*
-                     * 负责从broker拉取消息：客户端需要拉取消息时并不会直接和broker通信
+                     * pullMessageService不断的从pullRequestQueue中获取PullRequest请求对象，
+                     * 然后发送request，从broker拉取消息：客户端需要拉取消息时并不会直接和broker通信
                      * 而是通过请求消息，委托pullMessageService来完成
                      */
                     this.pullMessageService.start();
